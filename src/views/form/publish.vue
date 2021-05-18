@@ -1,0 +1,222 @@
+<template>
+    <div class="publish-container">
+        <div>
+            <div class="publish-btn-view" v-if="publishStatus == 1">
+                <el-button
+                    @click="publishProject"
+                    size="medium"
+                    class="publish-btn"
+                    type="primary"><i class="el-icon-document-checked el-icon--right">开始发布</i></el-button>
+            </div>
+            <div class="publish-finish-view" v-else-if="publishStatus == 2">
+                <el-row type="flex" align="middle">
+                    <el-col :span="15">
+                        <div style="display: flex;justify-content: center">
+                            <div class="icon-view">
+                                <i class="el-icon-check success-icon"/>
+                            </div>
+                        </div>
+                        <div>
+                            <!-- <p class="success-title">恭喜您，发布成功！</p> -->
+                            <p class="success-title">问卷已发布</p>
+                        </div>
+                        <div>
+                            <p class="link-text"> {{ writeLink }}</p>
+                        </div>
+                        <el-row type="flex">
+
+                            <el-col :span="6" :offset="3">
+                                <el-button v-clipboard:copy="writeLink"
+                                           v-clipboard:success="()=>{this.msgSuccess('复制成功')}"
+                                           v-clipboard:error="()=>{this.msgError('复制失败')}" type="primary">复制链接
+                                </el-button>
+                            </el-col>
+                            <el-col :span="6" >
+                                <el-button
+                                    @click="stopPublishProject"
+                                    type="danger">停止发布
+                                </el-button>
+                            </el-col>
+                            <el-col :span="6">
+                                <el-button
+                                    @click="toFeedbackPageHandle"
+                                    type="warning">查看反馈
+                                </el-button>
+                            </el-col>
+                        </el-row>
+                    </el-col>
+                    <el-col :span="9">
+                        <div>
+                            <vue-qr v-if="writeLink" :callback="qrCodeGenSuccess" :text="writeLink"
+                                    :size="194"></vue-qr>
+                        </div>
+                        <div style="text-align: center">
+                            <el-link type="primary" @click="()=>{
+                                this.downloadFile('qrcode.png',this.qrCodeUrl)
+                            }">下载分享二维码
+                            </el-link>
+                        </div>
+                    </el-col>
+                </el-row>
+            </div>
+            <div class="publish-stop-view" v-else-if="publishStatus == 3">
+                <el-row type="flex" align="middle">
+                    <el-col :span="20" style="">
+                        <div style="display: flex;justify-content: center">
+                            <i class="el-icon-warning" style="color: #F56C6C; font-size: 59px"/>
+                        </div>
+                        <div>
+                            <p class="success-title">问卷停止收集</p>
+                        </div>
+                        <el-row type="flex">
+                            <el-col >
+                                <el-button
+                                    @click="publishProject"
+                                    type="primary">重新发布
+                                </el-button>
+                            </el-col>
+                        </el-row>
+                    </el-col>
+                </el-row>
+            </div>
+        </div>
+    </div>
+
+</template>
+
+<script>
+import VueQr from 'vue-qr'
+import {getCurrentDomain} from '@/utils'
+
+export default {
+    name: 'projectPublish',
+    components: {
+        VueQr
+    },
+    props: {
+        projectKey: ''
+    },
+    mounted() {
+        let url = window.location.protocol + '//' + window.location.host
+        this.writeLink = `${url}/project/write?key=${this.projectKey}`
+        this.getProjectStatus()
+    },
+    data() {
+        return {
+            publishStatus: 0,
+            writeLink: '',
+            qrCodeUrl: ''
+        }
+    }, methods: {
+        getProjectStatus() {
+            this.$api.get(`/user/project/${this.projectKey}`).then(res => {
+                this.publishStatus = res.data.status || 0
+                // if (res.data.status == 2) {
+                //     this.publishStatus = true
+                // }else{
+                //     this.publishStatus = false
+                // }
+            })
+        },
+        publishProject() {
+            this.$api.post(`/user/project/publish`, {key: this.projectKey}).then(res => {
+                this.publishStatus = 2
+                this.msgSuccess('发布成功')
+            })
+        },
+        stopPublishProject() {
+            this.$api.post('/user/project/stop', {'key': this.projectKey}).then(res => {
+                if (res.data) {
+                    this.msgSuccess('停止成功')
+                    // this.getProjectStatus()
+                    this.publishStatus = 3
+                }
+            })
+        },
+        qrCodeGenSuccess(dataUrl, id) {
+            this.qrCodeUrl = dataUrl
+        },
+        downloadFile(fileName, content) {
+            let aLink = document.createElement('a')
+            let blob = this.base64ToBlob(content) //new Blob([content]);
+            let evt = document.createEvent('HTMLEvents')
+            evt.initEvent('click', true, true)//initEvent 不加后两个参数在FF下会报错  事件类型，是否冒泡，是否阻止浏览器的默认行为
+            aLink.download = fileName
+            aLink.href = URL.createObjectURL(blob)
+            // aLink.dispatchEvent(evt);
+            aLink.click()
+        },
+        //base64转blob
+        base64ToBlob(code) {
+            let parts = code.split(';base64,')
+            let contentType = parts[0].split(':')[1]
+            let raw = window.atob(parts[1])
+            let rawLength = raw.length
+            let uInt8Array = new Uint8Array(rawLength)
+            for (let i = 0; i < rawLength; ++i) {
+                uInt8Array[i] = raw.charCodeAt(i)
+            }
+            return new Blob([uInt8Array], {type: contentType})
+        },
+        toFeedbackPageHandle() {
+            let currentDomain = getCurrentDomain()
+            let url = `${currentDomain}/project/form?key=${this.projectKey}&active=5`
+            window.location.href = url
+        }
+    }
+
+}
+</script>
+
+<style lang="scss" scoped>
+.publish-container {
+    width: 100%;
+    height: 100%;
+    padding: 0px;
+    margin: 0;
+    background-color: #F7F7F7;
+    font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+    min-height: 84vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.publish-finish-view,
+.publish-stop-view {
+    // width: 500px;
+    width: 574px;
+    height: 200px;
+    text-align: center;
+
+    .icon-view {
+        width: 59px;
+        height: 59px;
+        border-radius: 100px;
+        background-color: #67C23A;
+        display: flex;
+        align-items: center;
+        align-content: center;
+        justify-items: center;
+        justify-content: center;
+    }
+
+    .success-icon {
+        text-align: center;
+        color: white;
+        font-size: 30px;
+    }
+
+    .success-title {
+        color: rgba(16, 16, 16, 100);
+        font-size: 28px;
+    }
+
+    .link-text {
+        color: rgba(16, 16, 16, 100);
+        font-size: 14px;
+    }
+}
+
+</style>
